@@ -113,7 +113,7 @@ CLASS ZCL_BP IMPLEMENTATION.
 
       "error messages occurred?
       IF lt_return IS INITIAL.
-        sy-subrc = 7.
+        sy-subrc = 1.
       ELSE.
         READ TABLE lt_return[ 1 ]-object_msg INTO ls_return WITH KEY type = 'A'.
         IF sy-subrc > 0.
@@ -121,8 +121,14 @@ CLASS ZCL_BP IMPLEMENTATION.
         ENDIF.
       ENDIF.
 
-      IF sy-subrc = 0.
+      IF sy-subrc <> 0.
 
+        "commit
+        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+
+        "get number of created ship-to
+        IMPORT lv_partner TO rv_bu_partner FROM MEMORY ID 'BUP_MEMORY_PARTNER'.
+      ELSE.
         "update failed although validation was ok... :/
         RAISE EXCEPTION TYPE zcx_bc_bp
           EXPORTING
@@ -133,17 +139,10 @@ CLASS ZCL_BP IMPLEMENTATION.
                  attr2 = ls_return-message_v2
                  attr3 = ls_return-message_v3
                  attr4 = ls_return-message_v4 )
-            it_return = CORRESPONDING #( lt_return[ 1 ]-object_msg ).
-      ELSE.
-        "commit
-        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+            it_return = CORRESPONDING #( VALUE #( lt_return[ 1 ]-object_msg OPTIONAL ) ).
 
-        "get number of created ship-to
-        IMPORT lv_partner TO rv_bu_partner FROM MEMORY ID 'BUP_MEMORY_PARTNER'.
       ENDIF.
-
     ENDIF.
-
 
   ENDMETHOD.
 
@@ -230,7 +229,7 @@ CLASS ZCL_BP IMPLEMENTATION.
                                 searchterm2 = ls_address-sort2
                                 title_key   = '0003'  "company
 *                                partnertype = '0001'
-                                 ) "ship-to
+                                 )
                        ) )
         partner-central_data-role-roles = VALUE #( task = 'I'
           ( data_key = 'FLCU01'
@@ -246,35 +245,9 @@ CLASS ZCL_BP IMPLEMENTATION.
              data_key-operation = 'I'
              currently_valid    = abap_true
              data               = VALUE #(
-                                    postal = VALUE #(
-                                               data = VALUE #( BASE CORRESPONDING #( ls_address ) standardaddress = 'X' )
-                                                    )
-                                    remark = VALUE #(
-                                      current_state = 'C'
-                                      remarks = VALUE #(
-                                                ( task = 'I'
-                                                  data = VALUE #(
-                                                           langu     = 'E'
-                                                           langu_iso = 'EN'
-                                                           adr_notes = 'automatically created'(aen) ) )
-                                                ( task = 'I'
-                                                  data = VALUE #(
-                                                           langu     = 'D'
-                                                           langu_iso = 'DE'
-                                                           adr_notes = 'Automatisch angelegt'(ade) ) )
-                                                   )
-                                                   )
-                                    addr_usage-current_state = 'C'
-                                    addr_usage-addr_usages   = VALUE #(
-                                                              ( task                 = 'I'
-                                                                currently_valid      = 'X'
-                                                                data_key-addresstype = 'XXDEFAULT' "'FIRMA' " '0003' "business address
-                                                                data-standard        = abap_true )
-                                                              ( task                 = 'I'
-                                                                currently_valid      = 'X'
-                                                                data_key-addresstype = 'FIRMA' " '0003' "business address
-                                                                data-standard        = abap_true )
-                                                                       )
+                  postal = VALUE #(
+                      data = VALUE #( BASE CORRESPONDING #( ls_address ) standardaddress = 'X' )
+                                      )
                                      )
                                     )
                                    )
@@ -282,6 +255,7 @@ CLASS ZCL_BP IMPLEMENTATION.
       customer-header-object_instance-kunnr = space "rv_bu_partner
       customer-header-object_task   = 'I'
       ensure_create-create_customer = abap_true
+      customer-sales_data-current_state = 'C'
       customer-sales_data-sales     = VALUE #(
                                       ( task = 'I'
                                         data_key-vkorg      = is_order_header-sales_org
@@ -292,7 +266,7 @@ CLASS ZCL_BP IMPLEMENTATION.
                                         data-vsbed          = '01' "shipping conditions
                                         data-antlf          = '9'  "maximum number of permitted part deliveries per item
                                         )
-                                        )
+                                 )
                              ).
 
     rv_bu_partner = book_business_partner( lx_data ).
